@@ -1,0 +1,11 @@
+from enum import Enum
+
+class ProcessStage(Enum):
+    INIT = 0
+    FILE_UPLOAD = 1
+    AI_DOCUMENT_ANALYSIS_START = 2
+    AI_DOCUMENT_ANALYSIS_END = 3
+    CHUNKING_START = 4
+    CHUNKING_END = 5
+    COMPARISON_START = 6
+    COMPARISON_END = 7
