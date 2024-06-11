@@ -53,7 +53,7 @@ class Preprocess:
     """
     # source_document: DocumentMetadata
 
-    def __init__(self):
+    def __init__(self, is_user_doc: bool = True, user_document_index_name: str = None, container_name: str = "ada-container"):
         """
         Initialize the class
         """
@@ -61,15 +61,16 @@ class Preprocess:
         # self.utils = Utils()
         assert self.check_azure_ai_search(), "Azure AI Search is not available"
         self.metadata_manager = metadata.MetadataManager()
-        self.container_name = 'ada-container'
+        self.container_name = container_name
         self.source_document = DocumentMetadata(None)
+        self.is_user_doc = is_user_doc
+        self.user_document_index_name = user_document_index_name
 
-    def upload_document(self, source_file_full_path: str, container_name: str = 'ada-container'):
+    async def upload_document(self, source_file_full_path: str):
         """
         Upload document to blob storage
         """
         # check if the document is in the right format
-        self.container_name = container_name
         source_file_full_path = os.path.abspath(source_file_full_path)
 
         if not os.path.exists(source_file_full_path):
@@ -86,11 +87,11 @@ class Preprocess:
         file_name = os.path.basename(source_file_full_path)
         
         try:
-            blob_service_client.create_container(container_name)
+            blob_service_client.create_container(self.container_name)
         except ResourceExistsError:
             pass
 
-        blob_client = blob_service_client.get_blob_client(container=container_name, blob=file_name)
+        blob_client = blob_service_client.get_blob_client(container=self.container_name, blob=file_name)
 
         with open(source_file_full_path, 'rb') as data:
             blob_client.upload_blob(data, overwrite=True)
@@ -104,7 +105,7 @@ class Preprocess:
 
         
 
-    def chunk_and_save_document(self, analyzed_document: AnalyzeResult, container_name: str = 'ada-container-chunked'):
+    async def chunk_and_save_document(self, analyzed_document: AnalyzeResult, container_name: str = 'ada-container-chunked'):
         """
         Chunk the document
         """
@@ -122,6 +123,7 @@ class Preprocess:
         saved_file_lists = []
 
         try:
+            # print(f"Creating container {container_name}")
             blob_service_client.create_container(container_name)
         except ResourceExistsError:
             pass
@@ -138,10 +140,10 @@ class Preprocess:
         self.source_document.chunked_blob_path = container_name
         self.metadata_manager.insert_event(self.source_document.to_dict())
 
-        return saved_file_lists
+        # return saved_file_lists
     
 
-    def run_document_analysis(self):
+    async def run_document_analysis(self):
         """
         Get the document analysis
         """
@@ -196,19 +198,19 @@ class Preprocess:
             r = requests.get(os.getenv('AZURE_SEARCH_ENDPOINT') + "/indexes/" + index_name, headers=headers, params=params) #+ "/indexes/" + index_name + 
             # if it exists, return True
             if r.ok:
-                sys.stdout.write("Index exists")
+                # sys.stdout.write("Index exists")
                 return True
             else:
                 # create index
                 self.create_index_azure_search(index_name)
-                sys.stdout.write("Index created")
+                # sys.stdout.write("Index created")
                 return True
         except Exception as e:
             print("Exception:",e)
             return False
             
 
-    def create_index_azure_search(self, index_name: str="ada_index_0"):
+    async def create_index_azure_search(self, index_name: str="ada_index_0"):
         headers = {'Content-Type': 'application/json','api-key': os.getenv('AZURE_SEARCH_KEY')}
         params = {'api-version': os.getenv('AZURE_SEARCH_API_VERSION')}
 
@@ -218,17 +220,29 @@ class Preprocess:
                 {"name": "id", "type": "Edm.String", "key": "true", "filterable": "true" },
                 {"name": "title","type": "Edm.String","searchable": "true","retrievable": "true"},
                 {"name": "content","type": "Edm.String","searchable": "true","retrievable": "true"},
-                {"name": "contentVector","type": "Collection(Edm.Single)","searchable": "true","retrievable": "true","dimensions": 1536,"vectorSearchConfiguration": "vectorConfig"},
+                {"name": "contentVector","type": "Collection(Edm.Single)","searchable": "true","retrievable": "true","dimensions": 1536,"vectorSearchProfile": "my-default-vector-profile"},
                 {"name": "filepath", "type": "Edm.String", "searchable": "true", "retrievable": "true", "sortable": "false", "filterable": "false", "facetable": "false"},
                 {"name": "url", "type": "Edm.String", "searchable": "false", "retrievable": "true", "sortable": "false", "filterable": "false", "facetable": "false"},     
                 {"name": "paragraph_num","type": "Edm.Int32","searchable": "false","retrievable": "true"},
                 # {"name": "keyphrases","type": "Collection(Edm.String)","searchable": "true","filterable": "false","retrievable": "true","sortable": "false","facetable": "false","key": "false","analyzer": "standard.lucene","synonymMaps": []}           
             ],
             "vectorSearch": {
-                "algorithmConfigurations": [
+                "algorithms": [
                     {
-                        "name": "vectorConfig",
-                        "kind": "hnsw"
+                        "name": "my-hnsw-config-1",
+                        "kind": "hnsw",
+                            "hnswParameters": {
+                                "m": 4,
+                                "efConstruction": 400,
+                                "efSearch": 500,
+                                "metric": "cosine"
+                            }
+                    }
+                ],
+                "profiles": [
+                    {
+                        "name": "my-default-vector-profile",
+                        "algorithm": "my-hnsw-config-1"
                     }
                 ]
             },
@@ -253,17 +267,15 @@ class Preprocess:
         }
 
         r = requests.put(os.environ['AZURE_SEARCH_ENDPOINT'] + "/indexes/" + index_name, data=json.dumps(index_payload), headers=headers, params=params)
-        print(r.status_code)
-        print(r.ok)   
+        # print(r.status_code)
+        # print(r.ok)   
  
 
-    def build_index_search(self, index_name: str = 'ada_index_0', container_name: str = 'ada-container-chunked'):
+    async def build_index_search(self, index_name: str = 'ada_index_0', container_name: str = 'ada-container-chunked'):
         """
         build an index for Azure AI Search
         """
         assert self.source_document is not None, "Source document is required"
-        # self.utils.upload_index_azure_search(index_name=self.source_document.PartitionKey.split('.')[0], container_name=self.container_name)
-        # self.utils.upload_index_azure_search(index_name=index_name, container_name=self.container_name)
         openai.api_type = "azure"
         openai.api_base = os.getenv("OPENAI_API_BASE")
         openai.api_version = "2023-03-15-preview"
@@ -306,14 +318,12 @@ class Preprocess:
                 }
                 
                 r = requests.post(os.environ['AZURE_SEARCH_ENDPOINT'] + "/indexes/" + index_name + "/docs/index", data=json.dumps(upload_payload), headers=headers, params=params)
-                print(r.status_code)
-                print(r.text)
+                # print(r.status_code)
+                # print(r.text)
             except Exception as e:
                 print("Exception:",e)
                 # print(content)
                 break
-
-        pass
 
     # def run_document_analysis_old(self):
     #     """

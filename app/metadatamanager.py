@@ -93,11 +93,10 @@ class MetadataManager:
         try:
             table_client = TableServiceClient.from_connection_string(connection_string)
             # table_client.create_table()
-            # print("Table exists.")
+            print(f"Trying to create a table {self.table_name}")
             table_client.create_table(table_name)
         except ResourceExistsError:
-            # print("Table exists.")
-            pass
+            print(f"{self.table_name} already exists")
     
     def insert_event(self, event_data: dict):
         """

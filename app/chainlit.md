@@ -1,14 +1,19 @@
-# Welcome to Chainlit! 🚀🤖
+# Advanced Document Analyzer(MTC project ADA)
 
-Hi there, Developer! 👋 We're excited to have you on board. Chainlit is a powerful tool designed to help you prototype, debug and share applications built on top of LLMs.
+Goal of the sample app is to show case how to use GPT (LLMs) to analzye document
 
-## Useful Links 🔗
+## Scenario
 
-- **Documentation:** Get started with our comprehensive [Chainlit Documentation](https://docs.chainlit.io) 📚
-- **Discord Community:** Join our friendly [Chainlit Discord](https://discord.gg/k73SQ3FyUh) to ask questions, share your projects, and connect with other developers! 💬
+Document comparision using LLM for contract review works.
 
-We can't wait to see what you create with Chainlit! Happy coding! 💻😊
+## Document comparison
 
-## Welcome screen
+One of common challenges are the document continuously changing. Especially when two different company making a deal or agreement, they exchange different version of the same or similar documents over and over.
 
-To modify the welcome screen, edit the `chainlit.md` file at the root of your project. If you do not want a welcome screen, just leave this file empty.
+By leveraging LLMs, people can reduce time to review document but increase productivity. 
+
+## Workflow
+
+There are standard document for a contract. And when partner sends document of contract terms, the reviewer need to use the standard document and find differences between the standard and new documents.
+
+

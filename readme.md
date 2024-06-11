@@ -10,7 +10,7 @@ Document comparision using LLM for contract review works.
 
 One of common challenges are the document continuously changing. Especially when two different company making a deal or agreement, they exchange different version of the same or similar documents over and over.
 
-By leveraging LLMs, people can reduce time to review document but increase productivity. 
+By leveraging LLMs, people can reduce time to review document but increase productivity.
 
 ## Workflow
 
