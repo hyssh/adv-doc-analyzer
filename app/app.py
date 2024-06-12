@@ -90,23 +90,21 @@ system_message = """
 @cl.on_chat_start
 async def start():
     # update list for chat settings
-    # get index name from Azure AI Search
-
-
+    # ToDo: get index name from Azure AI Search
     settings = await cl.ChatSettings(
         [
             Select(id="gold_index_name",
                    label="Select the index name for the Gold Standard document",
-                   values=["ada_index_0"],
+                   values=["gold"],
                    initial_index=0),
             Select(id="user_index_name",
                    label="Select the index name for the user document",
-                   values=["mytest11"])
+                   values=["test15","test16"])
         ]
     ).send()
 
     # Set the user session
-    cl.user_session.set("gold_standard_index_name", "ada_index_0")
+    cl.user_session.set("gold_standard_index_name", "gold")
     cl.user_session.set("task", None)
     cl.user_session.set("user_document_index_name", settings['user_index_name'])
     # # Define System message

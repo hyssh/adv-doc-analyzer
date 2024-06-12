@@ -44,6 +44,30 @@ from azure.ai.documentintelligence import DocumentIntelligenceClient
 from azure.ai.documentintelligence.models import AnalyzeDocumentRequest, ContentFormat, AnalyzeResult 
 from azure.storage.blob import BlobServiceClient
 from azure.core.exceptions import ResourceExistsError
+from azure.search.documents import SearchClient
+from azure.search.documents.indexes import SearchIndexClient
+from azure.search.documents.indexes.models import SearchIndex
+
+from azure.search.documents.indexes.models import (
+    ComplexField,
+    SearchIndex,
+    SearchField,
+    SearchFieldDataType,
+    VectorSearch,
+    HnswAlgorithmConfiguration,
+    HnswParameters,
+    VectorSearchAlgorithmMetric,
+    ExhaustiveKnnAlgorithmConfiguration,
+    ExhaustiveKnnParameters,
+    VectorSearchProfile,
+    # AzureOpenAIVectorizer,
+    # AzureOpenAIParameters,
+    SemanticConfiguration,
+    SemanticSearch,
+    SemanticPrioritizedFields,
+    SemanticField,
+    SearchIndex
+)
 
 # check metadata table
 
@@ -190,85 +214,87 @@ class Preprocess:
     
 
     def check_azure_ai_search(self, index_name: str="ada_index_0",):
-        headers = {'Content-Type': 'application/json','api-key': os.getenv('AZURE_SEARCH_KEY')}
-        params = {'api-version': os.getenv('AZURE_SEARCH_API_VERSION')}
-
-        # check if the index exists
+        credential = AzureKeyCredential(os.getenv('AZURE_SEARCH_KEY'))
+        
         try:
-            r = requests.get(os.getenv('AZURE_SEARCH_ENDPOINT') + "/indexes/" + index_name, headers=headers, params=params) #+ "/indexes/" + index_name + 
-            # if it exists, return True
-            if r.ok:
-                # sys.stdout.write("Index exists")
-                return True
-            else:
-                # create index
-                self.create_index_azure_search(index_name)
-                # sys.stdout.write("Index created")
-                return True
+            SearchClient(endpoint=os.getenv('AZURE_SEARCH_ENDPOINT'), 
+                                index_name=index_name, 
+                                credential=credential)
+            return True
         except Exception as e:
             print("Exception:",e)
             return False
             
 
     async def create_index_azure_search(self, index_name: str="ada_index_0"):
-        headers = {'Content-Type': 'application/json','api-key': os.getenv('AZURE_SEARCH_KEY')}
-        params = {'api-version': os.getenv('AZURE_SEARCH_API_VERSION')}
+        credential = AzureKeyCredential(os.getenv('AZURE_SEARCH_KEY'))
 
-        index_payload = {
-            "name": index_name,
-            "fields": [
-                {"name": "id", "type": "Edm.String", "key": "true", "filterable": "true" },
-                {"name": "title","type": "Edm.String","searchable": "true","retrievable": "true"},
-                {"name": "content","type": "Edm.String","searchable": "true","retrievable": "true"},
-                {"name": "contentVector","type": "Collection(Edm.Single)","searchable": "true","retrievable": "true","dimensions": 1536,"vectorSearchProfile": "my-default-vector-profile"},
-                {"name": "filepath", "type": "Edm.String", "searchable": "true", "retrievable": "true", "sortable": "false", "filterable": "false", "facetable": "false"},
-                {"name": "url", "type": "Edm.String", "searchable": "false", "retrievable": "true", "sortable": "false", "filterable": "false", "facetable": "false"},     
-                {"name": "paragraph_num","type": "Edm.Int32","searchable": "false","retrievable": "true"},
-                # {"name": "keyphrases","type": "Collection(Edm.String)","searchable": "true","filterable": "false","retrievable": "true","sortable": "false","facetable": "false","key": "false","analyzer": "standard.lucene","synonymMaps": []}           
-            ],
-            "vectorSearch": {
-                "algorithms": [
-                    {
-                        "name": "my-hnsw-config-1",
-                        "kind": "hnsw",
-                            "hnswParameters": {
-                                "m": 4,
-                                "efConstruction": 400,
-                                "efSearch": 500,
-                                "metric": "cosine"
-                            }
-                    }
-                ],
-                "profiles": [
-                    {
-                        "name": "my-default-vector-profile",
-                        "algorithm": "my-hnsw-config-1"
-                    }
-                ]
-            },
-            "semantic": {
-                "configurations": [
-                    {
-                        "name": "my-semantic-config",
-                        "prioritizedFields": {
-                            "titleField": {
-                                "fieldName": "title"
-                            },
-                            "prioritizedContentFields": [
-                                {
-                                    "fieldName": "content"
-                                }
-                            ],
-                            "prioritizedKeywordsFields": []
-                        }
-                    }
-                ]
-            }
-        }
+        fields = [
+            SearchField(name="id", type=SearchFieldDataType.String, key=True, filterable=True),
+            SearchField(name="title", type=SearchFieldDataType.String, searchable=True, retrievable=True),
+            SearchField(name="content", type=SearchFieldDataType.String, searchable=True, retrievable=True),
+            SearchField(name="contentVector", type=SearchFieldDataType.Collection(SearchFieldDataType.Single), searchable=True, retrievable=True, vector_search_dimensions=1536, vector_search_profile_name="my-default-vector-profile"),
+            SearchField(name="filepath", type=SearchFieldDataType.String, searchable=True, retrievable=True, filterable=True),
+            SearchField(name="url", type=SearchFieldDataType.String, retrievable=True),
+            SearchField(name="paragraph_num", type=SearchFieldDataType.Int32, retrievable=True),
+        ]
 
-        r = requests.put(os.environ['AZURE_SEARCH_ENDPOINT'] + "/indexes/" + index_name, data=json.dumps(index_payload), headers=headers, params=params)
-        # print(r.status_code)
-        # print(r.ok)   
+        # Example configuration (you can replace this with your data)
+        # profile_name = "my-hnsw-config-1"
+        # algorithm_config_name = "my-algorithms-config"
+
+        # Configure the vector search configuration  
+        vector_search = VectorSearch(  
+            algorithms=[  
+                HnswAlgorithmConfiguration(  
+                    name="my-hnsw-config-1",  
+                    parameters=HnswParameters(  
+                        m=4,  
+                        ef_construction=400,  
+                        ef_search=500,  
+                        metric=VectorSearchAlgorithmMetric.COSINE,  
+                    ),  
+                ),  
+                ExhaustiveKnnAlgorithmConfiguration(  
+                    name="my-knn-config-1",  
+                    parameters=ExhaustiveKnnParameters(  
+                        metric=VectorSearchAlgorithmMetric.COSINE,  
+                    ),  
+                ),  
+            ],  
+            profiles=[  
+                VectorSearchProfile(  
+                    name="my-default-vector-profile",  
+                    algorithm_configuration_name="my-hnsw-config-1",  
+                ),  
+                VectorSearchProfile(  
+                    name="myExhaustiveKnnProfile",  
+                    algorithm_configuration_name="my-knn-config-1",  
+                ),  
+            ],  
+        )
+
+        semantic_config = SemanticConfiguration(  
+            name="my-semantic-config",  
+            prioritized_fields=SemanticPrioritizedFields(
+                title_field=SemanticField(field_name="title"),
+                content_fields=[SemanticField(field_name="content")]  
+            ),  
+        )
+
+        semantic_search = SemanticSearch(semantic_config=semantic_config)
+
+        # Define the index
+        index = SearchIndex(name=index_name, 
+                            fields=fields,
+                            vector_search=vector_search,
+                            semantic_search=semantic_search)
+
+        # Create the index
+        search_index_client = SearchIndexClient(endpoint=os.getenv('AZURE_SEARCH_ENDPOINT'),
+                                          credential=credential)
+        
+        search_index_client.create_index(index)
  
 
     async def build_index_search(self, index_name: str = 'ada_index_0', container_name: str = 'ada-container-chunked'):
@@ -276,13 +302,17 @@ class Preprocess:
         build an index for Azure AI Search
         """
         assert self.source_document is not None, "Source document is required"
+
         openai.api_type = "azure"
         openai.api_base = os.getenv("OPENAI_API_BASE")
         openai.api_version = "2023-03-15-preview"
         openai.api_key = os.getenv("OPENAI_API_KEY")
-        headers = {'Content-Type': 'application/json','api-key': os.getenv('AZURE_SEARCH_KEY')}
-        params = {'api-version': os.getenv('AZURE_SEARCH_API_VERSION')}
 
+        credential = AzureKeyCredential(os.getenv('AZURE_SEARCH_KEY'))
+        client = SearchClient(endpoint=os.getenv('AZURE_SEARCH_ENDPOINT'), 
+                              index_name=index_name, 
+                              credential=credential)
+        
         openai_client = AzureOpenAI(api_key = os.getenv("OPENAI_API_KEY"),
                                     api_version = os.getenv("OPENAI_API_VERSION"),
                                     azure_endpoint = os.getenv("OPENAI_API_BASE"))
@@ -291,6 +321,7 @@ class Preprocess:
         # get a list of blobs using blob_service_client
         container_client = blob_service_client.get_container_client(container_name)
         blob_list = container_client.list_blobs()
+
         # read data in the blob
         for blob in blob_list:
             blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob.name)
@@ -303,95 +334,20 @@ class Preprocess:
             title = blob_data[:30]
             try:
                 upload_payload = {
-                    "value": [
-                        {
                             "id": self.text_to_base64(filename),
                             "title": f"{title}",
                             "content": blob_data,
                             "contentVector": openai_client.embeddings.create(input=[blob_data], model="text-embedding-ada-002").data[0].embedding,
                             "filepath": filename,
                             "url": blob_client.url,
-                            "paragraph_num": paragraph_num,
-                            "@search.action": "upload"
-                        },
-                    ]
-                }
+                            "paragraph_num": paragraph_num
+                        }
                 
-                r = requests.post(os.environ['AZURE_SEARCH_ENDPOINT'] + "/indexes/" + index_name + "/docs/index", data=json.dumps(upload_payload), headers=headers, params=params)
-                # print(r.status_code)
-                # print(r.text)
+                result = client.upload_documents(documents=[upload_payload])
+        
+                if not result[0].succeeded:
+                    print(f"Document upload failed: {result[0].key} {result[0].status_code} {result[0].message}")
+            
             except Exception as e:
                 print("Exception:",e)
-                # print(content)
                 break
-
-    # def run_document_analysis_old(self):
-    #     """
-    #     Get the document analysis
-    #     """
-    #     # get the document analysis from blob storage
-    #     # log the document analysis in table
-    #     endpoint = os.getenv('AZURE_FORM_RECOGNIZER_ENDPOINT')
-    #     key = os.getenv('AZURE_FORM_RECOGNIZER_KEY')
-
-    #     blob_service_client = BlobServiceClient.from_connection_string(os.getenv('AZURE_STORAGE_CONNECTION_STRING'))
-    #     blob_client = blob_service_client.get_blob_client(container=self.container_name, blob=self.source_document.PartitionKey)
-
-    #     # # download the document
-    #     # temp_file_path = os.path.join(os.getcwd(), self.source_document.PartitionKey)
-    #     # with open(file=temp_file_path, mode='wb') as file:
-    #     #     file.write(blob_client.download_blob().readall())
-
-    #     document_analysis_client = DocumentAnalysisClient(
-    #         endpoint=endpoint, credential=AzureKeyCredential(key), api_version="2024-02-29-preview", 
-    #     )
-    
-
-    #     poller = document_analysis_client.begin_analyze_document(model_id="prebuilt-layout",
-    #                                                              document=blob_client.download_blob().readall())
-        
-    #     result = poller.result()
-
-    #     doc_pages = []
-
-    #     print("Extracting text and table from document...")
-    #     for page in result.pages:
-    #         # extract text from page
-    #         markdown_table = ""
-    #         text = ""
-
-    #         for line in page.lines:
-    #             text += line.content + " "
-
-    #         # extract table from page
-    #         for table_idx, table in enumerate(result.tables):
-    #             for bounding_region_idx, bounding_region in enumerate(table.bounding_regions):
-    #                 # check page number
-    #                 if bounding_region.page_number == page.page_number:
-    #                     markdown_table = ""
-                        
-    #                     data = table.cells
-    #                     # Convert data to 2D list
-    #                     table = [["" for _ in range(max(cell.column_index for cell in data) + 1)] for _ in range(max(cell.row_index for cell in data) + 1)]  
-    #                     for cell in data:  
-    #                         table[cell.row_index][cell.column_index] = cell.content  
-                        
-    #                     # Convert 2D list to markdown  
-    #                     markdown_table = ["| " + " | ".join(row) + " |" for row in table]  
-    #                     header_seperator = ["|---" * len(table[0]) + "|"]  
-    #                     markdown_table = markdown_table[:1] + header_seperator + markdown_table[1:]  
-                        
-    #                     markdown_table = "\n".join(markdown_table)
-
-    #         # add text and markdown table
-    #         doc_pages.append({
-    #             "page_number": page.page_number,
-    #             "text": text,
-    #             "markdown_table": markdown_table
-    #         }) 
-        
-    #     result_file_name = self.source_document.PartitionKey.replace(".docx","_doc_ai.json")
-    #     blob_client = blob_service_client.get_blob_client(container=self.container_name, blob=result_file_name)
-    #     blob_client.upload_blob(doc_pages, overwrite=True)
-
-    #     return doc_pages
