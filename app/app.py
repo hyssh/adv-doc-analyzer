@@ -22,6 +22,7 @@ from langchain_openai import AzureOpenAIEmbeddings, OpenAIEmbeddings
 # # Configure root logger to ignore DEBUG and INFO messages  
 logging.basicConfig(level=logging.WARNING)  
 logging.getLogger('azure').setLevel(logging.WARNING)
+logging.getLogger('openai').setLevel(logging.WARNING)
 
 sys.path.append(os.getcwd())
 env_file_path = '.env'

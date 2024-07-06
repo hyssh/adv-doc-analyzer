@@ -15,9 +15,9 @@ class Utils:
     def __init__(self) -> None:
         load_dotenv()
         openai.api_type = "azure"
-        openai.api_base = os.getenv("OPENAI_API_BASE")
+        openai.api_base = os.getenv("AZURE_OPENAI_API_BASE")
         openai.api_version = "2023-03-15-preview"
-        openai.api_key = os.getenv("OPENAI_API_KEY")
+        openai.api_key = os.getenv("AZURE_OPENAI_API_KEY")
     
     def text_to_base64(self, text):
         # Convert text to bytes using UTF-8 encoding
@@ -96,9 +96,9 @@ class Utils:
     def upload_index_azure_search(self, index_name: str="ada_index_0", BLOB_CONTAINER_NAME="ada-container-chunked"):
         load_dotenv()
         openai.api_type = "azure"
-        openai.api_base = os.getenv("OPENAI_API_BASE")
+        openai.api_base = os.getenv("AZURE_OPENAI_API_BASE")
         openai.api_version = "2023-03-15-preview"
-        openai.api_key = os.getenv("OPENAI_API_KEY")
+        openai.api_key = os.getenv("AZURE_OPENAI_API_KEY")
 
         blob_service_client = BlobServiceClient.from_connection_string(os.getenv("AZURE_STORAGE_CONNECTION_STRING"))
         # get a list of blobs using blob_service_client

@@ -308,18 +308,18 @@ class Preprocess:
         assert self.source_document is not None, "Source document is required"
 
         openai.api_type = "azure"
-        openai.api_base = os.getenv("OPENAI_API_BASE")
+        openai.api_base = os.getenv("AZURE_OPENAI_API_BASE")
         openai.api_version = "2023-03-15-preview"
-        openai.api_key = os.getenv("OPENAI_API_KEY")
+        openai.api_key = os.getenv("AZURE_OPENAI_API_KEY")
 
         credential = AzureKeyCredential(os.getenv('AZURE_SEARCH_KEY'))
         client = SearchClient(endpoint=os.getenv('AZURE_SEARCH_ENDPOINT'), 
                               index_name=index_name, 
                               credential=credential)
         
-        openai_client = AzureOpenAI(api_key = os.getenv("OPENAI_API_KEY"),
-                                    api_version = os.getenv("OPENAI_API_VERSION"),
-                                    azure_endpoint = os.getenv("OPENAI_API_BASE"))
+        openai_client = AzureOpenAI(api_key = os.getenv("AZURE_OPENAI_API_KEY"),
+                                    api_version = os.getenv("AZURE_OPENAI_API_VERSION"),
+                                    azure_endpoint = os.getenv("AZURE_OPENAI_API_BASE"))
 
         blob_service_client = BlobServiceClient.from_connection_string(os.getenv("AZURE_STORAGE_CONNECTION_STRING"))
         # get a list of blobs using blob_service_client
