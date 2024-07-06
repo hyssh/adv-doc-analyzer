@@ -7,25 +7,39 @@ Allow users to upload a document and process it.
 After the processing is completed, the user may download the processed document.
 """
 import os
+import logging  
 import sys
 import chainlit as cl
 from chainlit.input_widget import Select
 from dotenv import load_dotenv
 from preprocess import Preprocess
-from openai import AsyncAzureOpenAI
+from RedLineAgent import RedLineAgent
+from docx import Document
+from openai import AsyncAzureOpenAI, AzureOpenAI
 from langchain_community.vectorstores.azuresearch import AzureSearch
 from langchain_openai import AzureOpenAIEmbeddings, OpenAIEmbeddings
-
+  
+# # Configure root logger to ignore DEBUG and INFO messages  
+logging.basicConfig(level=logging.WARNING)  
+logging.getLogger('azure').setLevel(logging.WARNING)
 
 sys.path.append(os.getcwd())
 env_file_path = '.env'
 load_dotenv(env_file_path, override=True)
 
 # Azure OpenAI API
-openai = AsyncAzureOpenAI(
-    api_version=os.getenv("OPENAI_API_VERSION"),
-    api_key=os.getenv("OPENAI_API_KEY"),
-    azure_endpoint=os.getenv("OPENAI_API_URL"),
+async_openai = AsyncAzureOpenAI(
+    api_version=os.getenv("AZURE_OPENAI_API_VERSION"),
+    api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+    azure_endpoint=os.getenv("AZURE_OPENAI_API_URL"),
+    max_retries=3,
+    timeout=30
+)
+
+sync_openai = AzureOpenAI(
+    api_version=os.getenv("AZURE_OPENAI_API_VERSION"),
+    api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+    azure_endpoint=os.getenv("AZURE_OPENAI_API_URL"),
     max_retries=3,
     timeout=30
 )
@@ -97,6 +111,8 @@ async def start():
                    label="Select the index name for the Gold Standard document",
                    values=["gold"],
                    initial_index=0),
+            
+            # TODO: get a list of index name from Azure AI Search
             Select(id="user_index_name",
                    label="Select the index name for the user document",
                    values=["test15","test16"])
@@ -106,15 +122,20 @@ async def start():
     # Set the user session
     cl.user_session.set("gold_standard_index_name", "gold")
     cl.user_session.set("task", None)
+    cl.user_session.set("document_status", None)
+    cl.user_session.set("download_url",None)
     cl.user_session.set("user_document_index_name", settings['user_index_name'])
     # # Define System message
     cl.user_session.set("message_history", [{"role":"system","content":system_message}])
 
-    await cl.Message(content="""This is sample application to show case the advanced document analyzer.
-                     Note that this works only for testing.
-                     Welcome to the Advance Document Analyzer""").send()
-    await select_task()
+    await cl.Message(content="""Welcome to the Advance Document Analyzer
+                     
+                     Note that this only for testing.
 
+                     This is sample application to show case how to use Azure OpenAI for the document comparison scenario.
+                     """).send()
+    
+    await select_task()
 
 @cl.step
 async def user_document_preprocessing(user_document_index_name):
@@ -164,9 +185,44 @@ async def user_document_preprocessing(user_document_index_name):
     await cl.Message(content="").send()
     await prep.create_index_azure_search(index_name=user_document_index_name)
 
-    await prep.build_index_search(index_name=user_document_index_name, 
-                            container_name=f"{new_container_chunking}")    
+    document_status = await prep.build_index_search(index_name=user_document_index_name, 
+                            container_name=f"{new_container_chunking}")
+    
+    cl.user_session.set("document_status", document_status.to_dict())
+
     await cl.Message(content=f"Document {file.name} has been processed and uploaded to the index {user_document_index_name}").send()
+
+@cl.step
+async def user_document_examination():
+    files = None
+
+    while files == None:
+        files = await cl.AskFileMessage(
+            content="Please upload a word document `.docx` to start the upload process",
+            accept=[".docx",
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
+            max_size_mb=10,
+            timeout=360
+        ).send()
+
+    file = files[0]
+    
+    await cl.Message(content="This task may take a few minutes. Please wait").send()
+    await cl.Message(content="").send()
+
+    gold_search = AzureSearch(azure_search_endpoint=os.getenv("AZURE_SEARCH_ENDPOINT"), 
+                                azure_search_key=os.getenv("AZURE_SEARCH_KEY"),
+                                index_name=cl.user_session.get("gold_standard_index_name"),
+                                embedding_function=embeddings.embed_query)
+    
+    redlineagent = RedLineAgent(sync_openai, 
+                                gold_search, 
+                                file.path)
+    
+    _, download_url = redlineagent.run()
+
+    await cl.Message(content="").send()
+    return download_url
 
 @cl.step
 async def select_task():
@@ -174,9 +230,11 @@ async def select_task():
         cl.Action(name="Upload Document",value="upload"),
         cl.Action(name="Question and Answer", value="qa"),
         cl.Action(name="Document comparison", value="review"),
+        cl.Action(name="Examine Document", value="examine")
     ]
 
     await cl.Message(content="Select a task you want me to support", actions=actions).send()
+
 
 @cl.action_callback("Upload Document")
 async def task_selected(action: cl.Action):
@@ -191,6 +249,7 @@ async def task_selected(action: cl.Action):
     
     await cl.Message(content=f"Your document {user_document_index_name} has been analysed. Please feel free to ask question").send()
     cl.user_session.set("task", "qa")
+
 
 @cl.action_callback("Question and Answer")
 async def task_selected(action: cl.Action):
@@ -218,9 +277,24 @@ async def task_selected(action: cl.Action):
     else:
         raise Exception("Error in selecting task")
 
+
+@cl.action_callback("Examine Document")
+async def task_selected(action: cl.Action):
+    cl.user_session.set("task", action.value)
+
+    if action.value == "examine":
+        download_url = await user_document_examination()
+    else:
+        raise Exception("Error in selecting task")
+
+    cl.user_session.set("download_url", download_url)
+    examined_document = [cl.File(name=os.path.basename(download_url), path=download_url, display="inline")]
+    await cl.Message(content="Click to download the file", elements=examined_document).send()
+
+
 @cl.step
 async def get_user_document_index_name():
-    res = await cl.AskUserMessage(content="What is the document name. The name will be used to build an index in Azure AI Search ", timeout=10).send()
+    res = await cl.AskUserMessage(content="What is the document name. The name will be used to build an index in Azure AI Search ", timeout=60).send()
     return res["output"]
 
 
@@ -253,9 +327,9 @@ async def on_message(message: cl.Message):
     gold_index_name = cl.user_session.get("gold_index_name")
     user_index_name = cl.user_session.get("user_index_name")
 
-    print(f"Task: {task}, Gold Index: {gold_index_name}, User Index: {user_index_name}")
+    # print(f"Task: {task}, Gold Index: {gold_index_name}, User Index: {user_index_name}")
     if task is None:
-        await cl.Message(content="").send()
+        # await cl.Message(content="").send()
         task = await select_task()
     elif task == "upload":
         pass
@@ -266,7 +340,7 @@ async def on_message(message: cl.Message):
 
             msg = cl.Message(content="")
 
-            async for stream_resp in await openai.chat.completions.create(
+            async for stream_resp in await async_openai.chat.completions.create(
                 model=os.getenv("DEPLOYMENT_NAME"),
                 messages=message_history,
                 temperature=0.1, 
@@ -277,7 +351,7 @@ async def on_message(message: cl.Message):
                     await msg.stream_token(token)
 
             message_history.append({"role": "assistant", "content": msg.content})
-            await msg.send()            
+            await msg.send()
         elif gold_index_name is not None and user_index_name is None:
             gold_search = AzureSearch(azure_search_endpoint=os.getenv("AZURE_SEARCH_ENDPOINT"), 
                                       azure_search_key=os.getenv("AZURE_SEARCH_KEY"),
@@ -306,7 +380,7 @@ async def on_message(message: cl.Message):
 
             msg = cl.Message(content="")
 
-            async for stream_resp in await openai.chat.completions.create(
+            async for stream_resp in await async_openai.chat.completions.create(
                 model=os.getenv("DEPLOYMENT_NAME"),
                 messages=message_history,
                 temperature=0.1, 
@@ -379,7 +453,7 @@ async def on_message(message: cl.Message):
 
         msg = cl.Message(content="")
 
-        async for stream_resp in await openai.chat.completions.create(
+        async for stream_resp in await async_openai.chat.completions.create(
             model=os.getenv("DEPLOYMENT_NAME"),
             messages=message_history,
             temperature=0.1, 
@@ -391,6 +465,13 @@ async def on_message(message: cl.Message):
 
         message_history.append({"role": "assistant", "content": msg.content})
         await msg.send()
+    elif task == "examine": 
+        print("Examine document")
+        if cl.user_session.get("download_url") is not None:
+            download_url = cl.user_session.get("download_url")
+            print(f"Download URL: {download_url}")
+            examined_document = [cl.File(name=os.path.basename(download_url), path=download_url)]
+            await cl.Message(content=f"Download examined document", elements=examined_document).send()
     else:
         pass
 

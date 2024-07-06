@@ -8,3 +8,4 @@
 **/*.docx
 **/*.pdf
 *.docx
+**/temp

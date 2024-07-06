@@ -27,7 +27,7 @@ This module is used to preprocess the data before document analysis
 
 # create a table in azure table storage
 import os
-import sys
+import logging  
 import json
 import base64
 import openai
@@ -39,15 +39,13 @@ from document import DocumentMetadata
 # from utils import Utils 
 from dotenv import load_dotenv
 from azure.core.credentials import AzureKeyCredential
-from azure.ai.formrecognizer import DocumentAnalysisClient, DocumentAnalysisApiVersion
+# from azure.ai.formrecognizer import DocumentAnalysisClient, DocumentAnalysisApiVersion
 from azure.ai.documentintelligence import DocumentIntelligenceClient
 from azure.ai.documentintelligence.models import AnalyzeDocumentRequest, ContentFormat, AnalyzeResult 
 from azure.storage.blob import BlobServiceClient
 from azure.core.exceptions import ResourceExistsError
 from azure.search.documents import SearchClient
 from azure.search.documents.indexes import SearchIndexClient
-from azure.search.documents.indexes.models import SearchIndex
-
 from azure.search.documents.indexes.models import (
     ComplexField,
     SearchIndex,
@@ -66,7 +64,6 @@ from azure.search.documents.indexes.models import (
     SemanticSearch,
     SemanticPrioritizedFields,
     SemanticField,
-    SearchIndex
 )
 
 # check metadata table
@@ -77,11 +74,17 @@ class Preprocess:
     """
     # source_document: DocumentMetadata
 
-    def __init__(self, is_user_doc: bool = True, user_document_index_name: str = None, container_name: str = "ada-container"):
+    def __init__(self, is_user_doc: bool = True, 
+                 user_document_index_name: str = None, 
+                 container_name: str = "ada-container"):
         """
         Initialize the class
         """
         load_dotenv()
+        # # Configure root logger to ignore DEBUG and INFO messages  
+        logging.basicConfig(level=logging.WARNING)  
+        logging.getLogger('azure').setLevel(logging.WARNING)  
+        logging.getLogger('openai').setLevel(logging.WARNING)  
         # self.utils = Utils()
         assert self.check_azure_ai_search(), "Azure AI Search is not available"
         self.metadata_manager = metadata.MetadataManager()
@@ -196,6 +199,7 @@ class Preprocess:
 
         # log the chunked document in table
         self.source_document.RowKey = ProcessStage.AI_DOCUMENT_ANALYSIS_END.name
+        self.source_document.analyized_json = result_file_name
         self.metadata_manager.insert_event(self.source_document.to_dict())
 
         return result
@@ -351,3 +355,9 @@ class Preprocess:
             except Exception as e:
                 print("Exception:",e)
                 break
+
+                    # log the chunked document in table
+            self.source_document.RowKey = ProcessStage.NEW_INDEX_END.name
+            self.metadata_manager.insert_event(self.source_document.to_dict())
+
+            return self.source_document
