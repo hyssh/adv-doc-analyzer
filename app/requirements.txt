@@ -5,7 +5,8 @@ langchain-core==0.2.4
 langchain-openai==0.1.8
 langchain-community==0.2.4
 tiktoken==0.7.0
-chainlit==1.0.506
+# chainlit==1.0.506 
+chainlit==1.1.306
 azure-data-tables==12.5.0
 azure-ai-documentintelligence==1.0.0b3
 azure-search-documents==11.4.0

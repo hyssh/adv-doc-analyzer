@@ -60,16 +60,107 @@ class RedLineAgent:
         self.container_name = container_name
 
 
-    def run(self):
+    async def run(self):
         blob_client = self.upload_document()
 
         document_intelligent_result = self.run_document_analysis(blob_client)
-        document_intelligent_contents = [paragraph.content for paragraph in document_intelligent_result.paragraphs]
 
+        # Exam title to check if there is added or removed terms of conditions
+        skimmed_document = self.skim(document_intelligent_result.content)
+
+        # Exam each paragraph
+        document_intelligent_contents = [paragraph.content for paragraph in document_intelligent_result.paragraphs]
         examiner_comments = self.examine(document_intelligent_contents)
         blob, reviewed_docx_path = self.add_save_examiner_comment(examiner_comments, blob_client)
 
-        return blob, reviewed_docx_path
+        return blob, reviewed_docx_path, skimmed_document
+        
+    def skim(self, examinee_content):
+        system_prompt = """
+            # Review
+            You are a contract reviewer in a business negotiation team. 
+            You are responsible for reviewing contracts and providing insights. 
+            Important to extract missing or additional information in the examinee content.
+            Expecially, check if there is removed terms of conditions in the examinee content.
+
+            ## Review process
+            1. Use Gold Standard title to check if there is missing or additional information in the examinee content.
+            2. If the examinee content is off the topic or completely different, please provide the details in well-structured format
+            3. If the examinee content has potential risk for our company, or against the gold standard, please provide the details in well-structured format
+            4. if the examinee content has different section name and number, please provide the differnt section numbers and titles in well-structured format
+
+            ## Gold Standard title
+            1.0 DEFINITIONS
+            1.1 Acceptance
+            1.2 Acceptance Criteria
+            1.3 Acceptance Test
+            1.4 Buyer Spend
+            1.5 Confidential Information
+            1.6 Consumable Item(s)
+            1.7 Counterfeit(s)
+            1.8 Custom Item(s)
+            1.9 Deliver, Delivered or Delivery
+            1.10 Delivery Date
+            1.11 Delivery Point
+            1.12 Demand Flow Technology (“DFT”) Signal Alert
+            1.13 End of Life (“EOL”) Date
+            1.14 Engineering Change Order (“ECO”)
+            1.15 Epidemic Failure
+            1.16 Field
+            1.17 Forecast(s)
+            1.18 Hazardous Materials
+            1.19 Intellectual Property (“IP”) Rights
+            1.20 Items
+            1.21 Inventions
+            1.22 Lead-time
+            1.23 Margin
+            1.24 Mark-Up
+            1.25 Milestone
+            1.26 Milestone Commitment Date
+            1.27 P1 Request
+            1.28 P2 Request
+            1.29 Project
+            1.30 Purchase Order
+            1.31 Purchase or Product Specifications
+            1.32 Release
+            1.33 Schedule(s)
+            1.34 Service(s)
+            1.35 Standard Item
+            1.36 Statement of Work
+            1.37 Source Inspection
+            1.38 Technology Roadmap
+            2.1 Purchase Orders
+            2.2 Schedules
+            2.3 Changes and Cancellations
+            2.4 Delivery Terms
+            2.5 Shipment and Packaging
+            2.6 Inspection and Acceptance
+            2.7 Transfer of Title and Risk of Loss
+            2.8 Source Inspection
+        """
+
+        updated_user_prompt = """
+            ## Examinee content:
+            {{examinee_content}}
+        """.replace("{{examinee_content}}", examinee_content)
+
+        res = self.openai.chat.completions.create(
+            model = os.getenv("DEPLOYMENT_NAME"),
+            messages = [
+                {
+                    "role": "system",
+                    "content": system_prompt
+                },
+                {
+                    "role": "user",
+                    "content": updated_user_prompt
+                }
+            ],
+            max_tokens=1024,
+            temperature=0.1
+        )
+        
+        return res.choices[0].message.content
         
 
     def upload_document(self):
