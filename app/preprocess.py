@@ -32,7 +32,7 @@ import json
 import base64
 import openai
 from openai import AzureOpenAI
-import requests
+# import requests
 import metadatamanager as metadata
 from ProcessStage import ProcessStage
 from document import DocumentMetadata
@@ -47,7 +47,6 @@ from azure.core.exceptions import ResourceExistsError
 from azure.search.documents import SearchClient
 from azure.search.documents.indexes import SearchIndexClient
 from azure.search.documents.indexes.models import (
-    ComplexField,
     SearchIndex,
     SearchField,
     SearchFieldDataType,
@@ -58,8 +57,6 @@ from azure.search.documents.indexes.models import (
     ExhaustiveKnnAlgorithmConfiguration,
     ExhaustiveKnnParameters,
     VectorSearchProfile,
-    # AzureOpenAIVectorizer,
-    # AzureOpenAIParameters,
     SemanticConfiguration,
     SemanticSearch,
     SemanticPrioritizedFields,
@@ -74,7 +71,10 @@ class Preprocess:
     """
     # source_document: DocumentMetadata
 
-    def __init__(self, is_user_doc: bool = True, 
+    def __init__(self,
+                 openai_client: AzureOpenAI = None,
+                 search_client: SearchClient = None, 
+                 is_user_doc: bool = True, 
                  user_document_index_name: str = None, 
                  container_name: str = "ada-container"):
         """
@@ -84,15 +84,18 @@ class Preprocess:
         # # Configure root logger to ignore DEBUG and INFO messages  
         logging.basicConfig(level=logging.WARNING)  
         logging.getLogger('azure').setLevel(logging.WARNING)  
-        logging.getLogger('openai').setLevel(logging.WARNING)  
+        logging.getLogger('openai').setLevel(logging.WARNING)
 
         # self.utils = Utils()
         assert self.check_azure_ai_search(), "Azure AI Search is not available"
+        self.openai_client = openai_client
+        self.search_client = search_client
         self.metadata_manager = metadata.MetadataManager()
         self.container_name = container_name
         self.source_document = DocumentMetadata(None)
         self.is_user_doc = is_user_doc
         self.user_document_index_name = user_document_index_name
+
 
     async def upload_document(self, source_file_full_path: str):
         """
@@ -182,9 +185,7 @@ class Preprocess:
 
         blob_service_client = BlobServiceClient.from_connection_string(os.getenv('AZURE_STORAGE_CONNECTION_STRING'))
         blob_client = blob_service_client.get_blob_client(container=self.container_name, blob=self.source_document.PartitionKey)
-
         document_intelligence_client  = DocumentIntelligenceClient(endpoint=endpoint, credential=AzureKeyCredential(key))
-
         document_bytes = blob_client.download_blob().readall()
 
         poller = document_intelligence_client.begin_analyze_document(model_id="prebuilt-layout",
@@ -194,7 +195,6 @@ class Preprocess:
         result: AnalyzeResult = poller.result()
         
         result_file_name = self.source_document.PartitionKey.replace(".docx","_doc_ai.json")
-        # blob_upload_client = BlobServiceClient.from_connection_string(os.getenv('AZURE_STORAGE_CONNECTION_STRING'))
         upload_client = blob_service_client.get_blob_client(container=self.container_name, blob=result_file_name)
         upload_client.upload_blob(json.dumps(result.as_dict()), overwrite=True)
 
@@ -204,6 +204,7 @@ class Preprocess:
         self.metadata_manager.insert_event(self.source_document.to_dict())
 
         return result
+    
     
     def text_to_base64(self, text):
         # Convert text to bytes using UTF-8 encoding
@@ -307,30 +308,20 @@ class Preprocess:
         build an index for Azure AI Search
         """
         assert self.source_document is not None, "Source document is required"
-
-        openai.api_type = "azure"
-        openai.api_base = os.getenv("AZURE_OPENAI_API_BASE")
-        openai.api_version = "2023-03-15-preview"
-        openai.api_key = os.getenv("AZURE_OPENAI_API_KEY")
-
+        
         credential = AzureKeyCredential(os.getenv('AZURE_SEARCH_KEY'))
         client = SearchClient(endpoint=os.getenv('AZURE_SEARCH_ENDPOINT'), 
                               index_name=index_name, 
-                              credential=credential)
-        
-        openai_client = AzureOpenAI(api_key = os.getenv("AZURE_OPENAI_API_KEY"),
-                                    api_version = os.getenv("AZURE_OPENAI_API_VERSION"),
-                                    azure_endpoint = os.getenv("AZURE_OPENAI_API_BASE"))
+                              credential=credential)        
 
-        blob_service_client = BlobServiceClient.from_connection_string(os.getenv("AZURE_STORAGE_CONNECTION_STRING"))
         # get a list of blobs using blob_service_client
+        blob_service_client = BlobServiceClient.from_connection_string(os.getenv("AZURE_STORAGE_CONNECTION_STRING"))
         container_client = blob_service_client.get_container_client(container_name)
         blob_list = container_client.list_blobs()
         
         # read data in the blob
         for blob in blob_list:
             blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob.name)
-            # print(blob_client.url)
             # get file name for the blob.url to use it as document_name
             filename = blob.name.split("/")[-1].split(".")[0]        
             paragraph_num = int(filename.split("_")[-1]) + 1
@@ -345,7 +336,7 @@ class Preprocess:
                             "id": self.text_to_base64(filename),
                             "title": f"{title}",
                             "content": blob_data,
-                            "contentVector": openai_client.embeddings.create(input=[blob_data], model="text-embedding-ada-002").data[0].embedding,
+                            "contentVector": self.openai_client.embeddings.create(input=[blob_data], model="text-embedding-ada-002").data[0].embedding,
                             "filepath": filename,
                             "url": blob_client.url,
                             "paragraph_num": paragraph_num

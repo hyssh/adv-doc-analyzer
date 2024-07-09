@@ -188,7 +188,8 @@ async def user_document_preprocessing(user_document_index_name):
     await cl.Message(content=f"Document {file.name} is being processed.\nPlease wait").send()
     await cl.Message(content="").send()
 
-    prep = Preprocess(is_user_doc=True,
+    prep = Preprocess(openai_client=sync_openai, 
+                    is_user_doc=True,
                     user_document_index_name=user_document_index_name,
                     container_name=user_document_index_name)
     
