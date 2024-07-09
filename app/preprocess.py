@@ -85,6 +85,7 @@ class Preprocess:
         logging.basicConfig(level=logging.WARNING)  
         logging.getLogger('azure').setLevel(logging.WARNING)  
         logging.getLogger('openai').setLevel(logging.WARNING)  
+
         # self.utils = Utils()
         assert self.check_azure_ai_search(), "Azure AI Search is not available"
         self.metadata_manager = metadata.MetadataManager()
@@ -235,12 +236,12 @@ class Preprocess:
 
         fields = [
             SearchField(name="id", type=SearchFieldDataType.String, key=True, filterable=True),
-            SearchField(name="title", type=SearchFieldDataType.String, searchable=True, retrievable=True),
-            SearchField(name="content", type=SearchFieldDataType.String, searchable=True, retrievable=True),
-            SearchField(name="contentVector", type=SearchFieldDataType.Collection(SearchFieldDataType.Single), searchable=True, retrievable=True, vector_search_dimensions=1536, vector_search_profile_name="my-default-vector-profile"),
-            SearchField(name="filepath", type=SearchFieldDataType.String, searchable=True, retrievable=True, filterable=True),
-            SearchField(name="url", type=SearchFieldDataType.String, retrievable=True),
-            SearchField(name="paragraph_num", type=SearchFieldDataType.Int32, retrievable=True),
+            SearchField(name="title", type=SearchFieldDataType.String, searchable=True),
+            SearchField(name="content", type=SearchFieldDataType.String, searchable=True),
+            SearchField(name="contentVector", type=SearchFieldDataType.Collection(SearchFieldDataType.Single), searchable=True, vector_search_dimensions=1536, vector_search_profile_name="my-default-vector-profile"),
+            SearchField(name="filepath", type=SearchFieldDataType.String, searchable=True, filterable=True),
+            SearchField(name="url", type=SearchFieldDataType.String),
+            SearchField(name="paragraph_num", type=SearchFieldDataType.Int32),
         ]
 
         # Example configuration (you can replace this with your data)
@@ -286,7 +287,7 @@ class Preprocess:
             ),  
         )
 
-        semantic_search = SemanticSearch(semantic_config=semantic_config)
+        semantic_search = SemanticSearch(configurations=[semantic_config])
 
         # Define the index
         index = SearchIndex(name=index_name, 
@@ -325,7 +326,7 @@ class Preprocess:
         # get a list of blobs using blob_service_client
         container_client = blob_service_client.get_container_client(container_name)
         blob_list = container_client.list_blobs()
-
+        
         # read data in the blob
         for blob in blob_list:
             blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob.name)
@@ -335,7 +336,10 @@ class Preprocess:
             paragraph_num = int(filename.split("_")[-1]) + 1
             blob_data = blob_client.download_blob().readall()
             blob_data = blob_data.decode("utf-8", "ignore")
-            title = blob_data[:30]
+            if len(blob_data) >= 30:
+                title = blob_data[:30]
+            else:
+                title = blob_data
             try:
                 upload_payload = {
                             "id": self.text_to_base64(filename),
@@ -356,8 +360,8 @@ class Preprocess:
                 print("Exception:",e)
                 break
 
-                    # log the chunked document in table
-            self.source_document.RowKey = ProcessStage.NEW_INDEX_END.name
-            self.metadata_manager.insert_event(self.source_document.to_dict())
+        # log the chunked document in table
+        self.source_document.RowKey = ProcessStage.NEW_INDEX_END.name
+        self.metadata_manager.insert_event(self.source_document.to_dict())
 
-            return self.source_document
+        return self.source_document

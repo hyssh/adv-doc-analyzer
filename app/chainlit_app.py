@@ -8,6 +8,7 @@ After the processing is completed, the user may download the processed document.
 """
 import os
 import logging  
+import asyncio
 import sys
 import chainlit as cl
 from chainlit.input_widget import Select
@@ -58,6 +59,18 @@ serach_index_client = SearchIndexClient(endpoint=os.getenv("AZURE_SEARCH_ENDPOIN
 
 
 system_message = """
+# Review
+You are a contract reviewer in a business negotiation team. 
+You are responsible for reviewing contracts and providing insights. 
+Important to extract missing or additional information in the examinee content.
+Expecially, check if there is removed terms of conditions in the examinee content.
+
+## Review process
+1. Use Gold Standard title to check if there is missing or additional information in the examinee content.
+2. If the examinee content is off the topic or completely different, please provide the details in well-structured format
+3. If the examinee content has potential risk for our company, or against the gold standard, please provide the details in well-structured format
+4. if the examinee content has different section name and number, please provide the differnt section numbers and titles in well-structured format
+
 ## Example\\n- This is an in-domain QA example from another domain, intended to demonstrate how to generate responses with citations effectively. Note: this is just an example. For other questions, you **Must Not* use content from this example.
 
 ### Retrieved Documents\\n{\\n  \\"retrieved_documents\\": [\\n    {\\n      \\"[doc1]\\": {\\n        \\"content\\": \\"Dual Transformer Encoder (DTE)\\nDTE is a general pair-oriented sentence representation learning framework based on transformers. It offers training, inference, and evaluation for sentence similarity models. Model Details: DTE can train models for sentence similarity with features like building upon existing transformer-based text representations (e.g., TNLR, BERT, RoBERTa, BAG-NLR) and applying smoothness inducing technology for improved robustness.\\"\\n      }\\n    },\\n    {\\n      \\"[doc2]\\": {\\n        \\"content\\": \\"DTE-pretrained for In-context Learning\\nResearch indicates that finetuned transformers can retrieve semantically similar exemplars. Finetuned models, especially those tuned on related tasks, significantly boost GPT-3's in-context performance. DTE has many pretrained models trained on intent classification tasks, which can be used to find similar natural language utterances at test time.\\"\\n      }\\n    },\\n    {\\n      \\"[doc3]\\": {\\n        \\"content\\": \\"Steps for Using DTE Model\\n1. Embed train and test utterances using the DTE model.\\n2. For each test embedding, find K-nearest neighbors.\\n3. Prefix the prompt with the nearest embeddings.\\nDTE-Finetuned: This extends the DTE-pretrained method, where embedding models are further finetuned for prompt crafting tasks.\\"\\n      }\\n    },\\n    {\\n      \\"[doc4]\\": {\\n        \\"content\\": \\"Finetuning the Model\\nFinetune the model based on whether a prompt leads to correct or incorrect completions. This method, while general, may require a large dataset to finetune a model effectively for retrieving examples suitable for downstream inference models like GPT-3.\\"\\n      }\\n    }\\n  ]\\n}
@@ -142,10 +155,9 @@ I can help you to upload a document for review, QA or comparison.
 """
 
     elements = [cl.Text(name="ADA", content=welcome_message, display="inline")]
-
-    await cl.Message(content="Welcome Message", elements=elements).send()
-    
+    await cl.Message(content="Welcome Message", elements=elements).send()    
     await select_task()
+
 
 @cl.step(name="Document Preprocessing")
 async def user_document_preprocessing(user_document_index_name):
@@ -173,42 +185,39 @@ async def user_document_preprocessing(user_document_index_name):
 
     file = files[0]
 
-    await cl.Message(content=f"Document {file.name} is being processed. Please wait").send()
+    await cl.Message(content=f"Document {file.name} is being processed.\nPlease wait").send()
+    await cl.Message(content="").send()
+
     prep = Preprocess(is_user_doc=True,
                     user_document_index_name=user_document_index_name,
                     container_name=user_document_index_name)
     
-    await cl.Message(content=f"Document {file.name} is being uploaded to Azure Storage Account. Please wait").send()
-    # await cl.Message(content="").send()
+    await cl.Message(content=f"Document {file.name} is being uploaded to Azure Storage Account.\nPlease wait").send()
+    await cl.Message(content="").send()
     await prep.upload_document(source_file_full_path=file.path)
 
-    await cl.Message(content=f"Document {file.name} is being analyzed by Azure AI Document Intelligence Service. Please wait").send()
-    # await cl.Message(content="").send()
+    await cl.Message(content=f"Document {file.name} is being analyzed by Azure AI Document Intelligence Service.\nPlease wait").send()
+    await cl.Message(content="").send()
     analyzed_document = await prep.run_document_analysis()
 
-    await cl.Message(content=f"Document {file.name} is being chunked. Please wait").send()
-    # await cl.Message(content="").send()
+    await cl.Message(content=f"Document {file.name} is being chunked.\nPlease wait").send()
+    await cl.Message(content="").send()
     new_container_chunking = file.path.split('\\')[-1].split('.')[0] + "-chunked"
     await prep.chunk_and_save_document(analyzed_document, f"{new_container_chunking}")
-
-    await cl.Message(content=f"Document {file.name} is being indexed and stored by Azure AI Search. Please wait").send()
-    # await cl.Message(content="").send()
+    
+    await cl.Message(content=f"Document {file.name} is being indexed and stored by Azure AI Search.\nPlease wait").send()
+    await cl.Message(content="").send()
     await prep.create_index_azure_search(index_name=user_document_index_name)
-
-    document_status = await prep.build_index_search(index_name=user_document_index_name, 
-                            container_name=f"{new_container_chunking}")
+    document_status = await prep.build_index_search(index_name=user_document_index_name, container_name=f"{new_container_chunking}")
     
     cl.user_session.set("document_status", document_status.to_dict())
-
     search_indexes = [index.name for index in serach_index_client.list_indexes()]
-
     await cl.ChatSettings(
         [
             Select(id="gold_index_name",
                    label="Select the index name for the Gold Standard document",
                    values=search_indexes,),
             
-            # TODO: get a list of index name from Azure AI Search
             Select(id="user_index_name",
                    label="Select the index name for the user document",
                    values=search_indexes,)
@@ -272,7 +281,7 @@ async def task_selected(action: cl.Action):
 
     if action.value == "upload":
         await user_document_preprocessing(user_document_index_name)
-        # await cl.Message(content="").send()
+        await cl.Message(content="").send()
     else:
         raise Exception("Error in selecting task")
     
@@ -495,14 +504,24 @@ async def on_message(message: cl.Message):
         {user_docs_contents}
 
         ## Instruction
-        Follow the below steps to answer the user question:
-        ### 1. Understand the user question
-        ### 2. Compare the Gold standard document and the review document
-        ### 3. Answer the user question based on the comparison
-        If the question is not clear or not available in either Gold or Review document:
-        explain which data is missing and ask the user to provide more information.        
         If the question is not about comparing the document, please provide the below response:
-        The requested information is not available in the retrieved data. Please try another query or topic.
+        Make sure both Gold Standard and Review documents have similar context, if not inform the user about the differences.
+        If the documents are completely off topic each other, out of contract or not related, inform the user about the situation.
+        Follow the below steps to answer the user question:        
+        ### 1. Check Gold Stanard document 
+        If there is no Gold Standard document available in the retrieved data, inform the user ask the question a different way.
+        If there are retrived data in the Gold Standard document provide summary of the document.
+        ### 2. Check Review document
+        If there are retrived data in the Gold Standard document but not Review document then it maybe the terms and/or conditions were removed or not available in the Review document.
+        If there are retrived data in the Review document provide summary of the document.
+        ### 3. Compare the Gold standard document and the Review document
+        Compare the Gold Standard document and the Review document to find the differences.
+        Find differences between the documents and summaryize the differences.
+        Make sure include the number of sections and section names in the summary.
+        ### 4. Answer the user question based on the comparison
+        Explain differences between the Gold Standard document and the Review document.
+        Add commnets risks that may arise from the differences.
+        
 
         ## User Question
         {message.content}
