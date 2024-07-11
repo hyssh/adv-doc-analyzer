@@ -203,7 +203,9 @@ async def user_document_preprocessing(user_document_index_name):
 
     await cl.Message(content=f"Document {file.name} is being chunked.\nPlease wait").send()
     await cl.Message(content="").send()
-    new_container_chunking = file.path.split('\\')[-1].split('.')[0] + "-chunked"
+
+    new_container_chunking = os.path.basename(file.path).split('.')[0] + "-chunked"
+    print(f"New Container: {new_container_chunking}")
     await prep.chunk_and_save_document(analyzed_document, f"{new_container_chunking}")
     
     await cl.Message(content=f"Document {file.name} is being indexed and stored by Azure AI Search.\nPlease wait").send()

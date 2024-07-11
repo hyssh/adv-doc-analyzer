@@ -154,10 +154,11 @@ class Preprocess:
         saved_file_lists = []
 
         try:
-            # print(f"Creating container {container_name}")
+            # Creating container for chucnked document
             blob_service_client.create_container(container_name)
         except ResourceExistsError:
-            pass
+            print(f"{container_name} is found")
+            
 
         # save each paragraph in a separate files
         for i, paragraph in enumerate(analyzed_document.paragraphs):
