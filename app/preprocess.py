@@ -103,6 +103,9 @@ class Preprocess:
         """
         # check if the document is in the right format
         source_file_full_path = os.path.abspath(source_file_full_path)
+        print(f"Uploading document: {source_file_full_path}")
+        print()
+        print(os.getenv('AZURE_STORAGE_CONNECTION_STRING'))
 
         if not os.path.exists(source_file_full_path):
             raise Exception('Document does not exist')
@@ -112,6 +115,8 @@ class Preprocess:
         
         # upload the document to blob storage
         blob_service_client = BlobServiceClient.from_connection_string(os.getenv('AZURE_STORAGE_CONNECTION_STRING'))
+        print(blob_service_client.account_name)
+        print(blob_service_client)
 
         # check container exsitence
         # get file name from source_file_full_path
