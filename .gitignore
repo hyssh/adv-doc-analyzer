@@ -2,11 +2,8 @@
 **/.env
 **/__pycache__
 **/.chainlit
-**/.chainlit.md
 .vscode
 .vscode/settings.json
-**/*.docx
 **/*.pdf
-*.docx
 **/temp
 **/.files
