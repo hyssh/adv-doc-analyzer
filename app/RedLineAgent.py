@@ -77,71 +77,77 @@ class RedLineAgent:
         
     def skim(self, examinee_content):
         system_prompt = """
-            # Review
-            You are a contract reviewer in a business negotiation team. 
-            You are responsible for reviewing contracts and providing insights. 
-            Important to extract missing or additional information in the examinee content.
-            Expecially, check if there is removed terms of conditions in the examinee content.
+        You are a contract reviewer in a business negotiation team. 
+        You are responsible for reviewing contracts and providing insights. 
+        Key obejctive is Important to extract missing or additional section number or title in the examinee content.
+        Expecially, check if there is removed number title in the examinee content. 
+        It is very important, if there is missing number and or title in given [Gold Standard title], inform user
+        This skim review.Do not provide summary of given examinee content. Absolutely no need to summarize content.
 
-            ## Review process
-            1. Use Gold Standard title to check if there is missing or additional information in the examinee content.
-            2. If the examinee content is off the topic or completely different, please provide the details in well-structured format
-            3. If the examinee content has potential risk for our company, or against the gold standard, please provide the details in well-structured format
-            4. if the examinee content has different section name and number, please provide the differnt section numbers and titles in well-structured format
+        ## Skim review process
+        1. Use Gold Standard title to check if there is missing or additional title.
+        2. If the examinee content has different section number title compare to [Gold Standard title], provide the differnt section numbers and titles of examinee content as a well-structured format
+        3. If the examinee content has potential risk by added or removed title, or against the gold standard, please provide the details as a well-structured format
+        4. If the examinee content is off the topic or completely different, please provide the details in well-structured format
 
-            ## Gold Standard title
-            1.0 DEFINITIONS
-            1.1 Acceptance
-            1.2 Acceptance Criteria
-            1.3 Acceptance Test
-            1.4 Buyer Spend
-            1.5 Confidential Information
-            1.6 Consumable Item(s)
-            1.7 Counterfeit(s)
-            1.8 Custom Item(s)
-            1.9 Deliver, Delivered or Delivery
-            1.10 Delivery Date
-            1.11 Delivery Point
-            1.12 Demand Flow Technology (“DFT”) Signal Alert
-            1.13 End of Life (“EOL”) Date
-            1.14 Engineering Change Order (“ECO”)
-            1.15 Epidemic Failure
-            1.16 Field
-            1.17 Forecast(s)
-            1.18 Hazardous Materials
-            1.19 Intellectual Property (“IP”) Rights
-            1.20 Items
-            1.21 Inventions
-            1.22 Lead-time
-            1.23 Margin
-            1.24 Mark-Up
-            1.25 Milestone
-            1.26 Milestone Commitment Date
-            1.27 P1 Request
-            1.28 P2 Request
-            1.29 Project
-            1.30 Purchase Order
-            1.31 Purchase or Product Specifications
-            1.32 Release
-            1.33 Schedule(s)
-            1.34 Service(s)
-            1.35 Standard Item
-            1.36 Statement of Work
-            1.37 Source Inspection
-            1.38 Technology Roadmap
-            2.1 Purchase Orders
-            2.2 Schedules
-            2.3 Changes and Cancellations
-            2.4 Delivery Terms
-            2.5 Shipment and Packaging
-            2.6 Inspection and Acceptance
-            2.7 Transfer of Title and Risk of Loss
-            2.8 Source Inspection
+        ## In your response infrom
+        1. What is added titles
+        2. What is removed titles
+        3. Any risks associated with added and/or removed titles
+
+        ## Gold Standard title
+        1.0 DEFINITIONS
+        1.1 Acceptance
+        1.2 Acceptance Criteria
+        1.3 Acceptance Test
+        1.4 Buyer Spend
+        1.5 Confidential Information
+        1.6 Consumable Item(s)
+        1.7 Counterfeit(s)
+        1.8 Custom Item(s)
+        1.9 Deliver, Delivered or Delivery
+        1.10 Delivery Date
+        1.11 Delivery Point
+        1.12 Demand Flow Technology (“DFT”) Signal Alert
+        1.13 End of Life (“EOL”) Date
+        1.14 Engineering Change Order (“ECO”)
+        1.15 Epidemic Failure
+        1.16 Field
+        1.17 Forecast(s)
+        1.18 Hazardous Materials
+        1.19 Intellectual Property (“IP”) Rights
+        1.20 Items
+        1.21 Inventions
+        1.22 Lead-time
+        1.23 Margin
+        1.24 Mark-Up
+        1.25 Milestone
+        1.26 Milestone Commitment Date
+        1.27 P1 Request
+        1.28 P2 Request
+        1.29 Project
+        1.30 Purchase Order
+        1.31 Purchase or Product Specifications
+        1.32 Release
+        1.33 Schedule(s)
+        1.34 Service(s)
+        1.35 Standard Item
+        1.36 Statement of Work
+        1.37 Source Inspection
+        1.38 Technology Roadmap
+        2.1 Purchase Orders
+        2.2 Schedules
+        2.3 Changes and Cancellations
+        2.4 Delivery Terms
+        2.5 Shipment and Packaging
+        2.6 Inspection and Acceptance
+        2.7 Transfer of Title and Risk of Loss
+        2.8 Source Inspection
         """
 
         updated_user_prompt = """
-            ## Examinee content:
-            {{examinee_content}}
+        ## Examinee content:
+        {{examinee_content}}
         """.replace("{{examinee_content}}", examinee_content)
 
         res = self.openai.chat.completions.create(
@@ -290,7 +296,7 @@ class RedLineAgent:
             2.8 Source Inspection
 
             ## Examples
-            ### Example When the two paragraphs are similar but not identical
+            ### 1. Example When the two paragraphs are similar but not identical
             The cosine similarity between the paragraph is 0.993.
 
             ---gold---
@@ -306,7 +312,7 @@ class RedLineAgent:
             More conditions are added to the access control. There is no risk for the company.
             ```
 
-            ### Example When the two versions are identical
+            ### 2. Example When the two versions are identical
             The cosine similarity between the paragraph is 0.992.
 
             ---gold---
@@ -322,7 +328,7 @@ class RedLineAgent:
             No differences
             ```
 
-            ### Example When the two versions are off the topic or completely different
+            ### 3. Example When the two versions are off the topic or completely different
             The cosine similarity between the paragraph is 0.990.
 
             ---gold---
@@ -338,8 +344,8 @@ class RedLineAgent:
             Not able to compare
             ```
 
-            ### Example out of socpe
-            The cosine similarity between the paragraph is 0.123.
+            ### 4. Example new term is added in examinee
+            The cosine similarity between the paragraph is 0.001.
 
             ---gold---
             
@@ -351,7 +357,7 @@ class RedLineAgent:
 
             Your Answer:
             ```
-            out of scope
+            Given topic isn't exist in the Gold Standard document. This might be new term. Please review the term.
             ```
             """
         
@@ -366,7 +372,7 @@ class RedLineAgent:
             ---examinee---
             {{examinee_paragraph}}
             ------
-            """
+        """
         
         updated_user_prompt = user_prompt.replace("{{gold_paragraph}}", gold_paragraph).\
                                         replace("{{examinee_paragraph}}", examinee_paragraph).\
