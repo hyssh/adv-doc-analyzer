@@ -148,6 +148,8 @@ async def start():
 
 I can help you to upload a document for review, QA or comparison. 
 
+[Download a sample word document](https://raw.githubusercontent.com/hyssh/adv-doc-analyzer/master/sample_docs/test.docx) for test
+
 - `Upload Document` - Upload a document for review, QA or comparison. You'll be asked to name of the document and upload a document.
 - `Question and Answer` - I can help you to answer questions around a document. You must choose one document in the settings.
 - `Document Comparison` - I can help you to compare two documents. You must choose two documents in the settings.
@@ -308,6 +310,18 @@ async def task_selected(action: cl.Action):
             await cl.Message(content="For the `Question and Answer` you need to select one document. You can't select two documents.").send()
             await cl.Message(content="To compare two document you must select `Document Comparision` service.").send()
             await cl.Message(content="I'll reset the document in the setting, please choose one document for the `Question and Answer`.").send()
+            search_indexes = [index.name for index in serach_index_client.list_indexes()]
+            await cl.ChatSettings(
+                [
+                    Select(id="gold_index_name",
+                        label="Select the index name for the Gold Standard document",
+                        values=search_indexes,),
+                    
+                    Select(id="user_index_name",
+                        label="Select the index name for the user document",
+                        values=search_indexes,)
+                ]
+            ).send()
 
             cl.user_session.set("task", None)
             cl.user_session.set("gold_index_name", None)
@@ -327,15 +341,15 @@ async def task_selected(action: cl.Action):
     elif action.value == "comparison" and cl.user_session.get("gold_index_name") is not None and cl.user_session.get("user_index_name") is None:
             await cl.Message(content="This `Comparison` is about comparing Gold Standard Dcoument and the selected user document. I'll answer your question in terms of differences between the documents").send()
             await cl.Message(content="Please select the `User Document` name from the setting panel").send()
-            cl.user_session.set("task", None)
+            # cl.user_session.set("task", None)
     elif action.value == "comparison" and cl.user_session.get("gold_index_name") is None and cl.user_session.get("user_index_name") is not None:
             await cl.Message(content="This `Comparison` is about comparing Gold Standard Dcoument and the selected user document. I'll answer your question in terms of differences between the documents").send()
             await cl.Message(content="Please select `Gold Standard Dcoument` to compare").send()
-            cl.user_session.set("task", None)
+            # cl.user_session.set("task", None)
     elif action.value == "comparison" and cl.user_session.get("gold_index_name") is None and cl.user_session.get("user_index_name") is None:
             await cl.Message(content="This `Comparison` is about comparing Gold Standard Dcoument and the selected user document. I'll answer your question in terms of differences between the documents").send()
             await cl.Message(content="Please select `Gold Standard Dcoument` and `User Document` name from the setting panel to compare").send()
-            cl.user_session.set("task", None)
+            # cl.user_session.set("task", None)
     else:
         cl.user_session.set("task", None)
         await cl.Message(content="Somthing isn't corret").send()
@@ -406,16 +420,31 @@ async def setup_agent(settings):
     else:
         await cl.Message(content=f"My task has not been selected yet").send()
         task = await select_task()
+        pass
 
     if task == "qa":
         if gold_index_name is not None and user_index_name is None: 
-                await cl.Message(content=f"Selected Gold standard document name is `{gold_index_name}` and this is our ground truth.").send()
+            await cl.Message(content=f"Selected Gold standard document name is `{gold_index_name}` and this is our ground truth.").send()
+            await cl.Message(content="Ask a question, e.g., `Summarize  Acceptance condition`").send()
             
         if gold_index_name is None and user_index_name is not None:
             await cl.Message(content=f"Selected target document name is `{user_index_name}` and this is our ground truth").send()
+            await cl.Message(content="Ask a question, e.g., `Summarize  Acceptance condition `").send()
+
+        if gold_index_name is not None and user_index_name is not None:
+            await cl.Message(content="For the `Question and Answer` you need to select one document. You can't select two documents.").send()
+            await cl.Message(content="To compare two document you must select `Document Comparision` service.").send()
+            await cl.Message(content="I'll reset the document in the setting, please choose one document for the `Question and Answer`.").send()
+
+            cl.user_session.set("gold_index_name", None)
+            cl.user_session.set("user_index_name", None)
+        
+        if gold_index_name is None and user_index_name is None:
+            await cl.Message(content="Please select the gold index name or user index name from the setting panel").send()
     elif task == "comparison":
         if gold_index_name is not None and user_index_name is not None:
             await cl.Message(content=f"Selected target document are `{gold_index_name}` and `{user_index_name}` and both are going to be used for conversation").send()
+            await cl.Message(content="Ask a question, e.g., `What are the differences in terms of delivery condition. Use Markdown table format for the answer.`").send()
     else:
         pass
 
@@ -524,9 +553,11 @@ async def on_message(message: cl.Message):
         Find differences between the documents and summaryize the differences.
         Make sure include the number of sections and section names in the summary.
         ### 4. Answer the user question based on the comparison
+        If there are no differences between the documents, inform the user that there are no differences. 
+        Do not provide or information that are the same.
+        It is important to provide the differences between the documents.
         Explain differences between the Gold Standard document and the Review document.
-        Add commnets risks that may arise from the differences.
-        
+        Add commnets risks that may arise from the differences.        
 
         ## User Question
         {message.content}
