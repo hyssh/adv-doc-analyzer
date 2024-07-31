@@ -152,7 +152,7 @@ I can help you to upload a document for review, QA or comparison.
 
 - `Upload Document` - Upload a document for review, QA or comparison. You'll be asked to name of the document and upload a document.
 - `Question and Answer` - I can help you to answer questions around a document. You must choose one document in the settings.
-- `Document Comparison` - I can help you to compare two documents. You must choose two documents in the settings.
+- `Compare Documents` - I can help you to compare two documents. You must choose two documents in the settings.
 - `Examine Document` - I can help you to examine a document by running an automated examine process based on Gold Standard Document.
 
 You can find source code of this app [Github](https://github.com/hyssh/adv-doc-analyzer)
