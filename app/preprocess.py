@@ -337,7 +337,7 @@ class Preprocess:
                             "id": self.text_to_base64(filename),
                             "title": f"{title}",
                             "content": blob_data,
-                            "contentVector": self.openai_client.embeddings.create(input=[blob_data], model="text-embedding-ada-002").data[0].embedding,
+                            "contentVector": self.openai_client.embeddings.create(input=[blob_data], model=os.getenv("EMBEDDING_MODEL_NAME")).data[0].embedding,
                             "filepath": filename,
                             "url": blob_client.url,
                             "paragraph_num": paragraph_num
