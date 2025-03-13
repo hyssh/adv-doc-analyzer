@@ -1,0 +1,135 @@
+[
+    {
+        "document_filename": "Planning Model Training Using Computer Vision v0.docx",
+        "project_title": "Planning Model Training Using Computer Vision",
+        "author": "Hyunsuk",
+        "table_of_contents": [
+            "Planning Model Training Using Computer Vision",
+            "Phases of the Project and Training Environment Specifications",
+            "Introduction",
+            "Phases of the Project",
+            "Phases of the Project > Model Selection and Development",
+            "Phases of the Project > Model Training and Validation",
+            "Phases of the Project > Model Testing and Evaluation",
+            "Training Environment and Specifications",
+            "Training Environment and Specifications > Hardware Specifications",
+            "Training Environment and Specifications > Software Specifications",
+            "Training Environment and Specifications > Cloud Services",
+            "Training Environment and Specifications > Data Management",
+            "Conclusion"
+        ],
+        "keywords": [
+            "computer vision",
+            "model training",
+            "model selection",
+            "model development",
+            "training environment",
+            "hardware specifications",
+            "software specifications",
+            "cloud services",
+            "data management"
+        ],
+        "tasks": [
+            {
+                "task_code": "MT0",
+                "task_description": "Data Scientist, utilizing machine learning algorithms to train the model on the labeled data."
+            }
+        ]
+    },
+    {
+        "document_filename": "Plan for Model Training Using Azure Machine Learning Service_V0.docx",
+        "project_title": "Plan for Model Training Using Azure Machine Learning Service",
+        "author": "Unknown",
+        "table_of_contents": [
+            "Plan for Model Training Using Azure Machine Learning Service",
+            "Roles: Data Scientist and ML Engineer",
+            "Introduction",
+            "Project Overview",
+            "Phases of the Project",
+            "Phases of the Project > Data Preparation",
+            "Phases of the Project > Model Training and Evaluation",
+            "Phases of the Project > Model Deployment Pipeline",
+            "Phases of the Project > Model Monitoring and Maintenance",
+            "Conclusion"
+        ],
+        "keywords": [
+            "Azure Machine Learning",
+            "model training",
+            "model deployment",
+            "GitHub Actions",
+            "data preprocessing",
+            "feature engineering",
+            "hyperparameter tuning",
+            "continuous integration",
+            "continuous deployment"
+        ],
+        "tasks": [
+            {
+                "task_code": "DP0",
+                "task_description": "Data Scientist, cleaning and preparing the video data for training purposes."
+            },
+            {
+                "task_code": "MT0",
+                "task_description": "Data Scientist, utilizing machine learning algorithms to train the model on the labeled data."
+            },
+            {
+                "task_code": "EV0",
+                "task_description": "Assessing the model's performance and fine-tuning it for optimal accuracy."
+            },
+            {
+                "task_code": "DY0",
+                "task_description": "Integrating the trained model into a surveillance system for real-time monitoring."
+            }
+        ]
+    },
+    {
+        "document_filename": "Project Data Science Project for Remote Desktop Surveillance_v0.docx",
+        "project_title": "Data Science Project for Remote Desktop Surveillance: Anomaly Detection Using AI",
+        "author": "Unknown",
+        "table_of_contents": [
+            "Data Science Project for Remote Desktop Surveillance: Anomaly Detection Using AI",
+            "Purpose",
+            "Project Description",
+            "Intended Users",
+            "Model Development Environment",
+            "Potential Business Impact"
+        ],
+        "keywords": [
+            "remote desktop surveillance",
+            "anomaly detection",
+            "video feeds",
+            "AI model",
+            "data preprocessing",
+            "feature extraction",
+            "model training",
+            "model evaluation",
+            "model deployment"
+        ],
+        "tasks": [
+            {
+                "task_code": "DC0",
+                "task_description": "Recording and gathering video feeds from various remote desktop sessions."
+            },
+            {
+                "task_code": "DP0",
+                "task_description": "Data Scientist, cleaning and preparing the video data for training purposes."
+            },
+            {
+                "task_code": "FE0",
+                "task_description": "Data Scientist, identifying and extracting relevant features from the video feeds that indicate normal and anomalous activities."
+            },
+            {
+                "task_code": "MT0",
+                "task_description": "Data Scientist, utilizing machine learning algorithms to train the model on the labeled data."
+            },
+            {
+                "task_code": "EV0",
+                "task_description": "Assessing the model's performance and fine-tuning it for optimal accuracy."
+            },
+            {
+                "task_code": "DY0",
+                "task_description": "Integrating the trained model into a surveillance system for real-time monitoring."
+            }
+        ]
+    }
+]
