@@ -10,6 +10,9 @@ from azure.ai.documentintelligence import DocumentIntelligenceClient
 from azure.ai.documentintelligence.models import AnalyzeDocumentRequest, ContentFormat, AnalyzeResult 
 from azure.storage.blob import BlobServiceClient
 from azure.core.exceptions import ResourceExistsError
+from DocMiner import DocMiner
+from openai import AzureOpenAI
+
 
 # check metadata table
 class DocMinerPreprocess:
@@ -30,6 +33,92 @@ class DocMinerPreprocess:
         self.chunked_blob_path = None
         self.container_name = container_name
         self.file_name = None
+        self.openai = AzureOpenAI(
+            api_version=os.getenv("AZURE_OPENAI_API_VERSION"),
+            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+            azure_endpoint=os.getenv("AZURE_OPENAI_API_URL"),
+            max_retries=3,
+            timeout=30
+        )
+
+    def create_docminer(self, source_file_full_path: str) -> DocMiner:
+        analysis_result, blob_path = self.preprocess_document(source_file_full_path)
+
+        system_message = """
+        You are assisting content manager. The content manger is organizing document for better search and document operation tasks. Document operation task can be updating a term or ID in the document. 
+        Current task is document preprocessing for efficient search and document operation. 
+
+        Do data mining by extracting keyword and IDs from the given document. Define the hierarchy. Use the document file name, and under the file name build a keyword, ID hierarchy that might have dependency on other documents or IDs.
+
+        # Data mining steps 
+        1. note document file name
+        2. Categorize the document
+        3. Extract headings, titles, and subtitle to know the overall structure, the number or the order of title matters
+        4. extract keyword
+        5. extract IDs. It is very important to capture task_code and its description
+
+        # taks_code 
+        The task_code in a table. if it
+
+        # Output Format
+
+        Return your finding to user as a JSON format.
+        {
+                "document_filename": "filename.docx",
+                "file_location": "https:// or path/to/file",
+                "project_title": "Main title or first title at the top of document",
+                "author": "name of the author",
+                "table_of_contents": [
+                    "Main title",
+                    "title > subtitle",
+                    "title > subtitle",
+                    "title > subtitle > subtitle",
+                    "title > subtitle > subtitle > subtitle",
+                ],
+                "keywords": [
+                    "keyword",
+                    "keyword",
+                    "keyword",
+                ],
+                "tasks": [
+                    {
+                        "task_code": "code or id",
+                        "task_description": "description"
+                    }
+                ],
+                "reference_documents": [
+                    "filename.docx",
+                    "filename.docx"
+                ]
+            }
+        """
+        user_message = f"""
+        {str(analysis_result['content'])}
+        file_location: {unquote(blob_path)}
+        """
+
+        res = self.openai.chat.completions.create(
+            model = os.getenv("DEPLOYMENT_NAME"),
+            messages = [
+                {"role": "system", "content": system_message},
+                {"role": "user", "content": user_message}
+                ],
+            max_tokens=2000,
+            temperature=0.01,
+            top_p=0.01,
+        )
+
+        try:
+            json_content = res.choices[0].message.content.split("```json")[1].strip().strip('```')
+        except IndexError:
+            print("Index error in parsing JSON content, trying to parse the content without split function")
+            json_content = res.choices[0].message.content
+        except:
+            print("Error in parsing JSON content")
+        
+        docminer = json.loads(json_content)
+
+        return DocMiner(**docminer)
 
     def preprocess_document(self, source_file_full_path: str) -> AnalyzeResult:
         blob_path = self.upload_document(source_file_full_path) 
