@@ -55,7 +55,7 @@ class Utils:
                 {"name": "id", "type": "Edm.String", "key": "true", "filterable": "true" },
                 {"name": "title","type": "Edm.String","searchable": "true","retrievable": "true"},
                 {"name": "content","type": "Edm.String","searchable": "true","retrievable": "true"},
-                {"name": "contentVector","type": "Collection(Edm.Single)","searchable": "true","retrievable": "true","dimensions": 1536,"vectorSearchConfiguration": "vectorConfig"},
+                {"name": "content_vector","type": "Collection(Edm.Single)","searchable": "true","retrievable": "true","dimensions": 1536,"vectorSearchConfiguration": "vectorConfig"},
                 {"name": "filepath", "type": "Edm.String", "searchable": "true", "retrievable": "true", "sortable": "false", "filterable": "false", "facetable": "false"},
                 {"name": "url", "type": "Edm.String", "searchable": "false", "retrievable": "true", "sortable": "false", "filterable": "false", "facetable": "false"},     
                 {"name": "paragraph_num","type": "Edm.Int32","searchable": "false","retrievable": "true"},
@@ -99,21 +99,19 @@ class Utils:
         openai.api_base = os.getenv("AZURE_OPENAI_API_BASE")
         openai.api_version = "2023-03-15-preview"
         openai.api_key = os.getenv("AZURE_OPENAI_API_KEY")
+        # Prepare request headers/params for Azure Cognitive Search REST calls
+        headers = {'Content-Type': 'application/json','api-key': os.getenv('AZURE_SEARCH_KEY')}
+        params = {'api-version': os.getenv('AZURE_SEARCH_API_VERSION')}
 
         blob_service_client = BlobServiceClient.from_connection_string(os.getenv("AZURE_STORAGE_CONNECTION_STRING"))
-        # get a list of blobs using blob_service_client
         container_client = blob_service_client.get_container_client(BLOB_CONTAINER_NAME)
         blob_list = container_client.list_blobs()
-        # read data in the blob
+
         for blob in blob_list:
             blob_client = blob_service_client.get_blob_client(container=BLOB_CONTAINER_NAME, blob=blob.name)
-            # print(blob_client.url)
-            #https://openaiembedding.blob.core.windows.net/chunck-txt/Preferred_Gold_EPO_1500_Benefit_2022_in_Washington_0.txt
-            # get file name for the blob.url to use it as document_name
-            filename = blob.name.split("/")[-1].split(".")[0]        
+            filename = blob.name.split("/")[-1].split(".")[0]
             paragraph_num = int(filename.split("_")[-1]) + 1
-            blob_data = blob_client.download_blob().readall()
-            blob_data = blob_data.decode("utf-8", "ignore")
+            blob_data = blob_client.download_blob().readall().decode("utf-8", "ignore")
             title = blob_data[:30]
             try:
                 upload_payload = {
@@ -122,19 +120,25 @@ class Utils:
                             "id": self.text_to_base64(filename),
                             "title": f"{title}",
                             "content": blob_data,
-                            "contentVector": openai.Embedding.create(input=[blob_data], engine="text-embedding-ada-002")["data"][0]["embedding"],
+                            "content_vector": openai.Embedding.create(
+                                input=[blob_data],
+                                engine=os.getenv("EMBEDDING_MODEL_NAME") or "text-embedding-ada-002"
+                            )["data"][0]["embedding"],
                             "filepath": filename,
                             "url": blob_client.url,
                             "paragraph_num": paragraph_num,
                             "@search.action": "upload"
-                        },
+                        }
                     ]
                 }
-                
-                r = requests.post(os.environ['AZURE_SEARCH_ENDPOINT'] + "/indexes/" + index_name + "/docs/index", data=json.dumps(upload_payload), headers=headers, params=params)
+                r = requests.post(
+                    os.environ['AZURE_SEARCH_ENDPOINT'] + f"/indexes/{index_name}/docs/index",
+                    data=json.dumps(upload_payload),
+                    headers=headers,
+                    params=params,
+                )
                 print(r.status_code)
                 print(r.text)
             except Exception as e:
-                print("Exception:",e)
-                # print(content)
+                print("Exception:", e)
                 continue

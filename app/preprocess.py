@@ -41,7 +41,7 @@ from dotenv import load_dotenv
 from azure.core.credentials import AzureKeyCredential
 # from azure.ai.formrecognizer import DocumentAnalysisClient, DocumentAnalysisApiVersion
 from azure.ai.documentintelligence import DocumentIntelligenceClient
-from azure.ai.documentintelligence.models import AnalyzeDocumentRequest, ContentFormat, AnalyzeResult 
+from azure.ai.documentintelligence.models import AnalyzeDocumentRequest, AnalyzeResult 
 from azure.storage.blob import BlobServiceClient
 from azure.core.exceptions import ResourceExistsError
 from azure.search.documents import SearchClient
@@ -186,13 +186,16 @@ class Preprocess:
 
         blob_service_client = BlobServiceClient.from_connection_string(os.getenv('AZURE_STORAGE_CONNECTION_STRING'))
         blob_client = blob_service_client.get_blob_client(container=self.container_name, blob=self.source_document.PartitionKey)
-        document_intelligence_client  = DocumentIntelligenceClient(endpoint=endpoint, credential=AzureKeyCredential(key))
+        document_intelligence_client = DocumentIntelligenceClient(endpoint=endpoint, credential=AzureKeyCredential(key))
         document_bytes = blob_client.download_blob().readall()
 
-        poller = document_intelligence_client.begin_analyze_document(model_id="prebuilt-layout",
-                                                                    analyze_request=AnalyzeDocumentRequest(bytes_source=document_bytes),
-                                                                    output_content_format=ContentFormat.TEXT)
-        
+        # FIXED VERSION with correct parameter name 'body'
+        poller = document_intelligence_client.begin_analyze_document(
+            "prebuilt-layout",  # model_id as first positional parameter
+            body=document_bytes,  # Use 'body' parameter name
+            content_type="application/octet-stream"
+        )
+
         result: AnalyzeResult = poller.result()
         
         result_file_name = self.source_document.PartitionKey.replace(".docx","_doc_ai.json")
@@ -236,11 +239,22 @@ class Preprocess:
     async def create_index_azure_search(self, index_name: str="ada_index_0"):
         credential = AzureKeyCredential(os.getenv('AZURE_SEARCH_KEY'))
 
+        # NOTE: LangChain AzureSearch vectorstore expects the default embedding field name 'content_vector'.
+        # The previous implementation used 'contentVector' which caused runtime errors:
+        #   Unknown field 'content_vector' in vector field list.
+        # To resolve, we standardize on snake_case 'content_vector'. Existing indexes with the old
+        # field name must be deleted and recreated.
         fields = [
             SearchField(name="id", type=SearchFieldDataType.String, key=True, filterable=True),
             SearchField(name="title", type=SearchFieldDataType.String, searchable=True),
             SearchField(name="content", type=SearchFieldDataType.String, searchable=True),
-            SearchField(name="contentVector", type=SearchFieldDataType.Collection(SearchFieldDataType.Single), searchable=True, vector_search_dimensions=1536, vector_search_profile_name="my-default-vector-profile"),
+            SearchField(
+                name="content_vector",
+                type=SearchFieldDataType.Collection(SearchFieldDataType.Single),
+                searchable=True,
+                vector_search_dimensions=1536,
+                vector_search_profile_name="my-default-vector-profile",
+            ),
             SearchField(name="filepath", type=SearchFieldDataType.String, searchable=True, filterable=True),
             SearchField(name="url", type=SearchFieldDataType.String),
             SearchField(name="paragraph_num", type=SearchFieldDataType.Int32),
@@ -333,15 +347,23 @@ class Preprocess:
             else:
                 title = blob_data
             try:
+                embedding_deployment = os.getenv("EMBEDDING_MODEL_NAME")
+                if not embedding_deployment:
+                    raise ValueError("EMBEDDING_MODEL_NAME environment variable is not set.")
+
                 upload_payload = {
-                            "id": self.text_to_base64(filename),
-                            "title": f"{title}",
-                            "content": blob_data,
-                            "contentVector": self.openai_client.embeddings.create(input=[blob_data], model="text-embedding-ada-002").data[0].embedding,
-                            "filepath": filename,
-                            "url": blob_client.url,
-                            "paragraph_num": paragraph_num
-                        }
+                    "id": self.text_to_base64(filename),
+                    "title": f"{title}",
+                    "content": blob_data,
+                    # Use Azure OpenAI embedding deployment specified via env var
+                    "content_vector": self.openai_client.embeddings.create(
+                        input=[blob_data],
+                        model=embedding_deployment,
+                    ).data[0].embedding,
+                    "filepath": filename,
+                    "url": blob_client.url,
+                    "paragraph_num": paragraph_num,
+                }
                 
                 result = client.upload_documents(documents=[upload_payload])
         

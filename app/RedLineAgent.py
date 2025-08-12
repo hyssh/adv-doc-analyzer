@@ -32,9 +32,10 @@ from azure.ai.documentintelligence.models import AnalyzeResult
 from langchain_community.vectorstores.azuresearch import AzureSearch
 from azure.core.credentials import AzureKeyCredential
 from azure.ai.documentintelligence import DocumentIntelligenceClient
-from azure.ai.documentintelligence.models import AnalyzeDocumentRequest, ContentFormat, AnalyzeResult 
+from azure.ai.documentintelligence.models import AnalyzeResult 
 import logging  
   
+load_dotenv()
 
 class RedLineAgent:
     def __init__(self, 
@@ -46,8 +47,7 @@ class RedLineAgent:
         logging.basicConfig(level=logging.WARNING)  
         logging.getLogger('azure').setLevel(logging.WARNING)  
         
-        env_file_path = '.env'
-        load_dotenv(env_file_path, override=True)
+        load_dotenv()
 
         assert isinstance(openai, AzureOpenAI), "OpenAI should be an instance of AsyncAzureOpenAI"
         assert isinstance(gold_search, AzureSearch), "Gold search should be an instance of AzureSearch"
@@ -437,33 +437,40 @@ class RedLineAgent:
     def similarity(self, gold_paragraph:str, examinee:str, engine: str=os.getenv("EMBEDDING_MODEL_NAME")):
         if len(gold_paragraph) <= 1 or len(examinee) <= 1:
             return 0
-        
-        res = self.openai.embeddings.create(
-            model=engine,
-            input=[gold_paragraph, examinee],
-        )
+        if not engine:
+            raise ValueError("EMBEDDING_MODEL_NAME environment variable is not set. Set it to your Azure OpenAI embedding deployment name.")
+        try:
+            res = self.openai.embeddings.create(
+                model=engine,
+                input=[gold_paragraph, examinee],
+            )
+        except Exception as e:
+            # Provide clearer guidance for 404 (deployment not found)
+            if "404" in str(e) or "Resource not found" in str(e):
+                raise RuntimeError(
+                    f"Embedding deployment '{engine}' not found. Ensure an Azure OpenAI embedding deployment exists and EMBEDDING_MODEL_NAME is set accordingly. Original error: {e}"
+                ) from e
+            raise
 
         t1, t2 = res.data[0].embedding, res.data[1].embedding
-        
         return np.dot(t1, t2) / (np.linalg.norm(t1) * np.linalg.norm(t2)) 
 
     def run_document_analysis(self, blob_client):
+        """Run Document Intelligence layout extraction for the uploaded blob.
+
+        Uses the current SDK signature: begin_analyze_document(model_id, *, body=<bytes>, content_type="application/octet-stream")
+        Previous code used the deprecated AnalyzeDocumentRequest causing a missing 'body' TypeError.
         """
-        Get the document analysis
-        """
-        # get the document analysis from blob storage
-        # log the document analysis in table
         endpoint = os.getenv('AZURE_FORM_RECOGNIZER_ENDPOINT')
         key = os.getenv('AZURE_FORM_RECOGNIZER_KEY')
-
-        document_intelligence_client  = DocumentIntelligenceClient(endpoint=endpoint, credential=AzureKeyCredential(key))
+        document_intelligence_client = DocumentIntelligenceClient(endpoint=endpoint, credential=AzureKeyCredential(key))
 
         document_bytes = blob_client.download_blob().readall()
 
-        poller = document_intelligence_client.begin_analyze_document(model_id="prebuilt-layout",
-                                                                    analyze_request=AnalyzeDocumentRequest(bytes_source=document_bytes),
-                                                                    output_content_format=ContentFormat.TEXT)
-        
+        poller = document_intelligence_client.begin_analyze_document(
+            "prebuilt-layout",  # model_id positional
+            body=document_bytes,
+            content_type="application/octet-stream",
+        )
         result: AnalyzeResult = poller.result()
-
         return result

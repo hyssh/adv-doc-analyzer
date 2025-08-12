@@ -27,8 +27,8 @@ logging.basicConfig(level=logging.WARNING)
 logging.getLogger('azure').setLevel(logging.WARNING)
 
 sys.path.append(os.getcwd())
-env_file_path = '.env'
-load_dotenv(env_file_path, override=True)
+# env_file_path = '.env'
+load_dotenv()
 
 # Azure OpenAI API
 async_openai = AsyncAzureOpenAI(
